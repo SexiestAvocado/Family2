@@ -11,6 +11,10 @@ public class PlayerController : MonoBehaviour
   //to test thw two types of movement
   public bool movimiento = true;
 
+  public Camera thirdPCamera; //variables for main camera in 3rd person
+  public Camera povCamera; //variable for camera in first person
+  public KeyCode switchKey; //variable for changing camera
+
   //make private when decided on final values
   public float moveSpeed = 30f;
   public float jumpForce = 5f;
@@ -19,7 +23,6 @@ public class PlayerController : MonoBehaviour
   private float verticalInput;
   private Rigidbody playerRb;
   public bool isGrounded = true;
-  // Start is called before the first frame update
   void Start()
   {
     playerRb = GetComponent<Rigidbody>();
@@ -54,6 +57,12 @@ public class PlayerController : MonoBehaviour
     {
       playerRb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
       isGrounded = false;
+    }
+    //toggle which camera is enabled whenthe F key is pressed
+    if (Input.GetKeyDown(switchKey))
+    {
+      thirdPCamera.enabled = !thirdPCamera.enabled;
+      povCamera.enabled = !povCamera.enabled;
     }
 
   }
