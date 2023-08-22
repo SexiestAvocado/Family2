@@ -2,13 +2,18 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.PlayerLoop;
 
 public class PlayerController : MonoBehaviour
 {
-  public float moveSpeed = 500f;
-  public float jumpForce = 40f;
+  //to test thw two types of movement
+  public bool movimiento = true;
+
+  //make private when decided on final values
+  public float moveSpeed = 30f;
+  public float jumpForce = 5f;
   private float gravityModifier = 1f;
   private float horizontalInput;
   private float verticalInput;
@@ -25,13 +30,24 @@ public class PlayerController : MonoBehaviour
   void Update()
   {
     // Move in two axis
-    /*horizontalInput = Input.GetAxis("Horizontal") * jumpForce;
-    verticalInput = Input.GetAxis("Vertical") * moveSpeed;*/
-    /*Vector3 moveDirection = new Vector3(horizontalInput, 1f, verticalInput) * moveSpeed * Time.deltaTime;
-    playerRb.velocity = new Vector3(moveDirection.x, playerRb.velocity.y, moveDirection.z);*/
+    horizontalInput = Input.GetAxis("Horizontal") * moveSpeed;
+    verticalInput = Input.GetAxis("Vertical") * moveSpeed;
 
-    /*playerRb.AddForce(Vector3.forward * moveSpeed * verticalInput * Time.deltaTime);
-    playerRb.AddForce(Vector3.right * moveSpeed * horizontalInput * Time.deltaTime);*/
+    if (movimiento) 
+    {
+      //doesn't slide
+      Vector3 moveDirection = new Vector3(horizontalInput, 1f, verticalInput) * moveSpeed * Time.deltaTime;
+      playerRb.velocity = new Vector3(moveDirection.x, playerRb.velocity.y, moveDirection.z);
+    }
+    if (!movimiento) 
+    {
+      //this slides like in ice
+      playerRb.AddForce(Vector3.forward * moveSpeed * verticalInput * Time.deltaTime);
+      //playerRb.AddForce(Vector3.back * moveSpeed * verticalInput * Time.deltaTime);
+      playerRb.AddForce(Vector3.right * moveSpeed * horizontalInput * Time.deltaTime);
+      //playerRb.AddForce(Vector3.left * moveSpeed * horizontalInput * Time.deltaTime);
+    }
+    
 
     // Jump
     if (isGrounded && Input.GetKeyDown(KeyCode.Space))
