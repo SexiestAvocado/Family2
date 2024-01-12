@@ -256,6 +256,24 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
   public void PostGroundingUpdate(float deltaTime)
   {
+    // Handle landing and leaving ground
+    if (Motor.GroundingStatus.IsStableOnGround && !Motor.LastGroundingStatus.IsStableOnGround)
+    {
+      OnLanded();
+    }
+    else if (!Motor.GroundingStatus.IsStableOnGround && Motor.LastGroundingStatus.IsStableOnGround)
+    {
+      OnLeaveStableGround();
+    }
+  }
+  protected void OnLanded()
+  {
+    Debug.Log("Landed");
+  }
+
+  protected void OnLeaveStableGround()
+  {
+    Debug.Log("Left ground");
   }
 
   public void AddVelocity(Vector3 velocity)
