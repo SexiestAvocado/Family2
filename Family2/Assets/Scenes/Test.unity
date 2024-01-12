@@ -410,7 +410,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -7.08, y: 0.5, z: -4.04}
-  m_LocalScale: {x: 7, y: 1.5, z: 7}
+  m_LocalScale: {x: 5, y: 5, z: 5}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1851914906}
@@ -1173,6 +1173,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e7f1484e5358efd4d85c86b71b52b7a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Motor: {fileID: 2018520314}
   MaxStableMoveSpeed: 10
   StableMovementSharpness: 15
   OrientationSharpness: 10
@@ -1180,12 +1181,12 @@ MonoBehaviour:
   AirAccelerationSpeed: 5
   Drag: 0.1
   AllowJumpingWhenSliding: 0
+  AllowDoubleJump: 0
   JumpSpeed: 10
   JumpPreGroundingGraceTime: 0
   JumpPostGroundingGraceTime: 0
   Gravity: {x: 0, y: -30, z: 0}
   MeshRoot: {fileID: 1067161713}
-  Motor: {fileID: 2018520314}
 --- !u!114 &2018520314
 MonoBehaviour:
   m_ObjectHideFlags: 0

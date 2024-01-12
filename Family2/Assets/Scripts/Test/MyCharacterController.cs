@@ -27,7 +27,8 @@ using System;
     public float Drag = 0.1f;
 
     [Header("Jumping")]
-    public bool AllowJumpingWhenSliding = false;
+    private bool AllowJumpingWhenSliding = true;
+    private bool AllowDoubleJump = true;
     public float JumpSpeed = 10f;
     public float JumpPreGroundingGraceTime = 0f;
     public float JumpPostGroundingGraceTime = 0f;
@@ -36,7 +37,7 @@ using System;
     public Vector3 Gravity = new Vector3(0, -30f, 0);
     public Transform MeshRoot;
 
-    //do not remove the "_" in the names, doesn't work without them...why?
+    //do not remove the "_" in _moveInputVector
     private Vector3 _moveInputVector;
     private Vector3 lookInputVector;
     private bool jumpRequested = false;
@@ -44,7 +45,7 @@ using System;
     private bool jumpedThisFrame = false;
     private float timeSinceJumpRequested = Mathf.Infinity;
     private float timeSinceLastAbleToJump = 0f;
-
+    private bool doubleJumpConsumed = false;
 
     private void Start()
     {
@@ -156,6 +157,21 @@ using System;
       timeSinceJumpRequested += deltaTime;
       if (jumpRequested)
       {
+        // Handle double jump
+        if (AllowDoubleJump)
+        {
+          if (jumpConsumed && !doubleJumpConsumed && (AllowJumpingWhenSliding ? !Motor.GroundingStatus.FoundAnyGround : !Motor.GroundingStatus.IsStableOnGround))
+          {
+            Motor.ForceUnground(0.1f);
+
+            // Add to the return velocity and reset jump state
+            currentVelocity += (Motor.CharacterUp * JumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
+            jumpRequested = false;
+            doubleJumpConsumed = true;
+            jumpedThisFrame = true;
+          }
+        }
+
         // See if we actually are allowed to jump
         if (!jumpConsumed && ((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) || timeSinceLastAbleToJump <= JumpPostGroundingGraceTime))
         {
@@ -192,13 +208,13 @@ using System;
         {
           jumpRequested = false;
         }
-
         // Handle jumping while sliding
         if (AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround)
         {
           // If we're on a ground surface, reset jumping values
           if (!jumpedThisFrame)
           {
+            doubleJumpConsumed = false;
             jumpConsumed = false;
           }
           timeSinceLastAbleToJump = 0f;
