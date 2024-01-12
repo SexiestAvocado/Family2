@@ -49,6 +49,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   private bool doubleJumpConsumed = false;
   private bool canWallJump = false;
   private Vector3 wallJumpNormal;
+  private Vector3 internalVelocityAdd = Vector3.zero;
 
   private void Start()
   {
@@ -202,6 +203,13 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     }
     // Reset wall jump
     canWallJump = false;
+
+    // Take into account additive velocity
+    if (internalVelocityAdd.sqrMagnitude > 0f)
+    {
+      currentVelocity += internalVelocityAdd;
+      internalVelocityAdd = Vector3.zero;
+    }
   }
 
   /// <summary>
@@ -276,8 +284,13 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     Debug.Log("Left ground");
   }
 
+  /*adds impulse/velocity
+  It is often desirable to have a quick and easy way to add forces and impulses to the character, whether it’s for explosion forces, hit
+  impacts, wind zones, etc…. In order to accomplish this, we will create an “AddVelocity” method in MyCharacterController, which will
+  maintain an internal velocity vector to add to the final velocity in UpdateVelocity*/
   public void AddVelocity(Vector3 velocity)
   {
+    internalVelocityAdd += velocity;
   }
 
   public void ProcessHitStabilityReport(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, Vector3 atCharacterPosition, Quaternion atCharacterRotation, ref HitStabilityReport hitStabilityReport)
