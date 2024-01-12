@@ -38,6 +38,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
   [Header("Misc")]
   public Vector3 Gravity = new Vector3(0, -30f, 0);
+  public bool OrientTowardsGravity = true;
   public Transform MeshRoot;
 
   //do not remove the "_" in _moveInputVector
@@ -128,6 +129,14 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
       // Set the current rotation (which will be used by the KinematicCharacterMotor)
       currentRotation = Quaternion.LookRotation(smoothedLookInputDirection, Motor.CharacterUp);
+    }
+    /*Orienting towards arbitrary up direction
+    In order to demonstrate how you could orient the character towards any direction, we will now implement an option that allows the
+    character to always orient its up direction in the opposite direction of the gravity*/
+    if (OrientTowardsGravity)
+    {
+      // Rotate from current up to invert gravity
+      currentRotation = Quaternion.FromToRotation((currentRotation * Vector3.up), -Gravity) * currentRotation;
     }
   }
 

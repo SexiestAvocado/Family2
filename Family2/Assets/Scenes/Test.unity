@@ -1778,6 +1778,7 @@ MonoBehaviour:
   JumpPreGroundingGraceTime: 0
   JumpPostGroundingGraceTime: 0
   Gravity: {x: 0, y: -30, z: 0}
+  OrientTowardsGravity: 1
   MeshRoot: {fileID: 1067161713}
 --- !u!114 &2018520314
 MonoBehaviour:
