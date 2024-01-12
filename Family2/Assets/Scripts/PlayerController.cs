@@ -14,6 +14,7 @@ public class PlayerController : MonoBehaviour
   public Camera thirdPCamera; //variables for main camera in 3rd person
   public Camera povCamera; //variable for camera in first person
   public KeyCode switchKey; //variable for changing camera
+  public GameObject VirtualCamera1;
 
   //make private when decided on final values
   public float moveSpeed = 30f;
@@ -61,8 +62,9 @@ public class PlayerController : MonoBehaviour
     //toggle which camera is enabled whenthe F key is pressed
     if (Input.GetKeyDown(switchKey))
     {
-      thirdPCamera.enabled = !thirdPCamera.enabled;
-      povCamera.enabled = !povCamera.enabled;
+      ChangeStateOfGameObject();
+      /*thirdPCamera.enabled = !thirdPCamera.enabled;
+      povCamera.enabled = !povCamera.enabled;*/
     }
 
   }
@@ -86,5 +88,10 @@ public class PlayerController : MonoBehaviour
     {
       isGrounded = true;
     }
+  }
+
+  void ChangeStateOfGameObject()
+  {
+    VirtualCamera1.SetActive(!VirtualCamera1.activeInHierarchy);
   }
 }
