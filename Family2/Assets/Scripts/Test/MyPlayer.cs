@@ -17,8 +17,9 @@ public class MyPlayer : MonoBehaviour
   private const string MouseScrollInput = "Mouse ScrollWheel";
   private const string HorizontalInput = "Horizontal";
   private const string VerticalInput = "Vertical";
+  
   private float ZoomCamera = 0.0f;
-  private float ImpulseMultiplier = 10.0f;
+  private float ImpulseMultiplier = 20.0f;
 
   private void Start()
   {
@@ -85,6 +86,8 @@ public class MyPlayer : MonoBehaviour
     characterInputs.MoveAxisRight = Input.GetAxisRaw(HorizontalInput);
     characterInputs.CameraRotation = OrbitCamera.Transform.rotation;
     characterInputs.JumpDown = Input.GetKeyDown(KeyCode.Space);
+    characterInputs.CrouchDown = Input.GetKeyDown(KeyCode.C);
+    characterInputs.CrouchUp = Input.GetKeyUp(KeyCode.C);
 
     // Apply inputs to character
     Character.SetInputs(ref characterInputs);

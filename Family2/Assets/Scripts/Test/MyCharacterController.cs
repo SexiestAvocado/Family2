@@ -10,6 +10,8 @@ public struct PlayerCharacterInputs
   public float MoveAxisRight;
   public Quaternion CameraRotation;
   public bool JumpDown;
+  public bool CrouchDown;
+  public bool CrouchUp;
 }
 
 public class MyCharacterController : MonoBehaviour, ICharacterController
@@ -39,6 +41,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   public Transform MeshRoot;
 
   //do not remove the "_" in _moveInputVector
+  private Collider[] probedColliders = new Collider[8];
   private Vector3 _moveInputVector;
   private Vector3 lookInputVector;
   private bool jumpRequested = false;
@@ -50,6 +53,8 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   private bool canWallJump = false;
   private Vector3 wallJumpNormal;
   private Vector3 internalVelocityAdd = Vector3.zero;
+  private bool shouldBeCrouching = false;
+  private bool isCrouching = false;
 
   private void Start()
   {
@@ -82,6 +87,22 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     {
       timeSinceJumpRequested = 0f;
       jumpRequested = true;
+    }
+    // Crouching input
+    if (inputs.CrouchDown)
+    {
+      shouldBeCrouching = true;
+
+      if (!isCrouching)
+      {
+        isCrouching = true;
+        Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
+        MeshRoot.localScale = new Vector3(1f, 0.5f, 1f);
+      }
+    }
+    else if (inputs.CrouchUp)
+    {
+      shouldBeCrouching = false;
     }
   }
 
@@ -204,7 +225,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     // Reset wall jump
     canWallJump = false;
 
-    // Take into account additive velocity
+    // Take into account additive impulse/velocity
     if (internalVelocityAdd.sqrMagnitude > 0f)
     {
       currentVelocity += internalVelocityAdd;
@@ -240,6 +261,26 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
       {
         // Keep track of time since we were last able to jump (for grace period)
         timeSinceLastAbleToJump += deltaTime;
+      }
+    }
+    // Handle uncrouching
+    if (isCrouching && !shouldBeCrouching)
+    {
+      // Do an overlap test with the character's standing height to see if there are any obstructions
+      Motor.SetCapsuleDimensions(0.5f, 2f, 1f);
+      if (Motor.CharacterCollisionsOverlap(
+              Motor.TransientPosition,
+              Motor.TransientRotation,
+              probedColliders) > 0)
+      {
+        // If obstructions, just stick to crouching dimensions
+        Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
+      }
+      else
+      {
+        // If no obstructions, uncrouch
+        MeshRoot.localScale = new Vector3(1f, 1f, 1f);
+        isCrouching = false;
       }
     }
   }
