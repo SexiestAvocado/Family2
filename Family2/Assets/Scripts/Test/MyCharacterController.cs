@@ -40,22 +40,23 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   public Vector3 Gravity = new Vector3(0, -30f, 0);
   public bool OrientTowardsGravity = true;
   public Transform MeshRoot;
+  public List<Collider> IgnoredColliders = new List<Collider>();
 
   //do not remove the "_" in _moveInputVector
-  private Collider[] probedColliders = new Collider[8];
+  private Collider[] _probedColliders = new Collider[8];
   private Vector3 _moveInputVector;
-  private Vector3 lookInputVector;
-  private bool jumpRequested = false;
-  private bool jumpConsumed = false;
-  private bool jumpedThisFrame = false;
-  private float timeSinceJumpRequested = Mathf.Infinity;
-  private float timeSinceLastAbleToJump = 0f;
-  private bool doubleJumpConsumed = false;
-  private bool canWallJump = false;
-  private Vector3 wallJumpNormal;
-  private Vector3 internalVelocityAdd = Vector3.zero;
-  private bool shouldBeCrouching = false;
-  private bool isCrouching = false;
+  private Vector3 _lookInputVector;
+  private bool _jumpRequested = false;
+  private bool _jumpConsumed = false;
+  private bool _jumpedThisFrame = false;
+  private float _timeSinceJumpRequested = Mathf.Infinity;
+  private float _timeSinceLastAbleToJump = 0f;
+  private bool _doubleJumpConsumed = false;
+  private bool _canWallJump = false;
+  private Vector3 _wallJumpNormal;
+  private Vector3 _internalVelocityAdd = Vector3.zero;
+  private bool _shouldBeCrouching = false;
+  private bool _isCrouching = false;
 
   private void Start()
   {
@@ -81,29 +82,29 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
     // Move and look inputs
     _moveInputVector = cameraPlanarRotation * moveInputVector;
-    lookInputVector = cameraPlanarDirection;
+    _lookInputVector = cameraPlanarDirection;
 
     // Jumping input
     if (inputs.JumpDown)
     {
-      timeSinceJumpRequested = 0f;
-      jumpRequested = true;
+      _timeSinceJumpRequested = 0f;
+      _jumpRequested = true;
     }
     // Crouching input
     if (inputs.CrouchDown)
     {
-      shouldBeCrouching = true;
+      _shouldBeCrouching = true;
 
-      if (!isCrouching)
+      if (!_isCrouching)
       {
-        isCrouching = true;
+        _isCrouching = true;
         Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
         MeshRoot.localScale = new Vector3(1f, 0.5f, 1f);
       }
     }
     else if (inputs.CrouchUp)
     {
-      shouldBeCrouching = false;
+      _shouldBeCrouching = false;
     }
   }
 
@@ -122,10 +123,10 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   /// </summary>
   public void UpdateRotation(ref Quaternion currentRotation, float deltaTime)
   {
-    if (lookInputVector != Vector3.zero && OrientationSharpness > 0f)
+    if (_lookInputVector != Vector3.zero && OrientationSharpness > 0f)
     {
       // Smoothly interpolate from current to target look direction
-      Vector3 smoothedLookInputDirection = Vector3.Slerp(Motor.CharacterForward, lookInputVector, 1 - Mathf.Exp(-OrientationSharpness * deltaTime)).normalized;
+      Vector3 smoothedLookInputDirection = Vector3.Slerp(Motor.CharacterForward, _lookInputVector, 1 - Mathf.Exp(-OrientationSharpness * deltaTime)).normalized;
 
       // Set the current rotation (which will be used by the KinematicCharacterMotor)
       currentRotation = Quaternion.LookRotation(smoothedLookInputDirection, Motor.CharacterUp);
@@ -187,33 +188,33 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     }
 
     // Handle jumping
-    jumpedThisFrame = false;
-    timeSinceJumpRequested += deltaTime;
-    if (jumpRequested)
+    _jumpedThisFrame = false;
+    _timeSinceJumpRequested += deltaTime;
+    if (_jumpRequested)
     {
       // Handle double jump
       if (AllowDoubleJump)
       {
-        if (jumpConsumed && !doubleJumpConsumed && (AllowJumpingWhenSliding ? !Motor.GroundingStatus.FoundAnyGround : !Motor.GroundingStatus.IsStableOnGround))
+        if (_jumpConsumed && !_doubleJumpConsumed && (AllowJumpingWhenSliding ? !Motor.GroundingStatus.FoundAnyGround : !Motor.GroundingStatus.IsStableOnGround))
         {
           Motor.ForceUnground(0.1f);
 
           // Add to the return velocity and reset jump state
           currentVelocity += (Motor.CharacterUp * JumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
-          jumpRequested = false;
-          doubleJumpConsumed = true;
-          jumpedThisFrame = true;
+          _jumpRequested = false;
+          _doubleJumpConsumed = true;
+          _jumpedThisFrame = true;
         }
       }
 
       // See if we actually are allowed to jump
-      if (canWallJump || (!jumpConsumed && ((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) || timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)))
+      if (_canWallJump || (!_jumpConsumed && ((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) || _timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)))
       {
         // Calculate jump direction before ungrounding
         Vector3 jumpDirection = Motor.CharacterUp;
-        if (canWallJump)
+        if (_canWallJump)
         {
-          jumpDirection = wallJumpNormal;
+          jumpDirection = _wallJumpNormal;
         }
         else if (Motor.GroundingStatus.FoundAnyGround && !Motor.GroundingStatus.IsStableOnGround)
         {
@@ -226,19 +227,19 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
         // Add to the return velocity and reset jump state
         currentVelocity += (jumpDirection * JumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
-        jumpRequested = false;
-        jumpConsumed = true;
-        jumpedThisFrame = true;
+        _jumpRequested = false;
+        _jumpConsumed = true;
+        _jumpedThisFrame = true;
       }
     }
     // Reset wall jump
-    canWallJump = false;
+    _canWallJump = false;
 
     // Take into account additive impulse/velocity
-    if (internalVelocityAdd.sqrMagnitude > 0f)
+    if (_internalVelocityAdd.sqrMagnitude > 0f)
     {
-      currentVelocity += internalVelocityAdd;
-      internalVelocityAdd = Vector3.zero;
+      currentVelocity += _internalVelocityAdd;
+      _internalVelocityAdd = Vector3.zero;
     }
   }
 
@@ -251,36 +252,37 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     // Handle jump-related values
     {
       // Handle jumping pre-ground grace period
-      if (jumpRequested && timeSinceJumpRequested > JumpPreGroundingGraceTime)
+      if (_jumpRequested && _timeSinceJumpRequested > JumpPreGroundingGraceTime)
       {
-        jumpRequested = false;
+        _jumpRequested = false;
       }
       // Handle jumping while sliding
       if (AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround)
       {
         // If we're on a ground surface, reset jumping values
-        if (!jumpedThisFrame)
+        if (!_jumpedThisFrame)
         {
-          doubleJumpConsumed = false;
-          jumpConsumed = false;
+          _doubleJumpConsumed = false;
+          _jumpConsumed = false;
         }
-        timeSinceLastAbleToJump = 0f;
+        _timeSinceLastAbleToJump = 0f;
       }
       else
       {
         // Keep track of time since we were last able to jump (for grace period)
-        timeSinceLastAbleToJump += deltaTime;
+        _timeSinceLastAbleToJump += deltaTime;
       }
     }
     // Handle uncrouching
-    if (isCrouching && !shouldBeCrouching)
+    if (_isCrouching && !_shouldBeCrouching)
     {
       // Do an overlap test with the character's standing height to see if there are any obstructions
       Motor.SetCapsuleDimensions(0.5f, 2f, 1f);
-      if (Motor.CharacterCollisionsOverlap(
+      if (Motor.CharacterOverlap(
               Motor.TransientPosition,
               Motor.TransientRotation,
-              probedColliders) > 0)
+              _probedColliders, Motor.CollidableLayers,
+                    QueryTriggerInteraction.Ignore) > 0)//also here is colliders to ignore
       {
         // If obstructions, just stick to crouching dimensions
         Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
@@ -289,13 +291,15 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
       {
         // If no obstructions, uncrouch
         MeshRoot.localScale = new Vector3(1f, 1f, 1f);
-        isCrouching = false;
+        _isCrouching = false;
       }
     }
   }
 
   public bool IsColliderValidForCollisions(Collider coll)
   {
+    if (IgnoredColliders.Contains(coll)) return false;
+    
     return true;
   }
 
@@ -307,8 +311,8 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   // We can wall jump only if we are not stable on ground and are moving  against an obstruction
     if (AllowWallJump && !Motor.GroundingStatus.IsStableOnGround && !hitStabilityReport.IsStable)
     {
-      canWallJump = true;
-      wallJumpNormal = hitNormal;
+      _canWallJump = true;
+      _wallJumpNormal = hitNormal;
     }
   }
 
@@ -340,7 +344,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   maintain an internal velocity vector to add to the final velocity in UpdateVelocity*/
   public void AddVelocity(Vector3 velocity)
   {
-    internalVelocityAdd += velocity;
+    _internalVelocityAdd += velocity;
   }
 
   public void ProcessHitStabilityReport(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, Vector3 atCharacterPosition, Quaternion atCharacterRotation, ref HitStabilityReport hitStabilityReport)

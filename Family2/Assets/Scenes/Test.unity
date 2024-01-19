@@ -2246,6 +2246,8 @@ MonoBehaviour:
   Gravity: {x: 0, y: -30, z: 0}
   OrientTowardsGravity: 1
   MeshRoot: {fileID: 1067161713}
+  IgnoredColliders:
+  - {fileID: 1602017662}
 --- !u!114 &2018520314
 MonoBehaviour:
   m_ObjectHideFlags: 0
