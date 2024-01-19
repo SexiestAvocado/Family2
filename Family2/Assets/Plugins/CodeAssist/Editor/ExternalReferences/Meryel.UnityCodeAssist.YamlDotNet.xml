@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <doc>
     <assembly>
-        <name>UnityCodeAssistYamlDotNet</name>
+        <name>Meryel.UnityCodeAssist.YamlDotNet</name>
     </assembly>
     <members>
         <member name="T:Meryel.UnityCodeAssist.YamlDotNet.Core.AnchorNotFoundException">

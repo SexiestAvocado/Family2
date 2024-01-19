@@ -19,7 +19,8 @@ namespace UnityStandardAssets.ImageEffects
 
         private RenderTexture accumTexture;
 
-        override protected void Start()
+    [Obsolete]
+    protected override void Start()
         {
             if (!SystemInfo.supportsRenderTextures)
             {
@@ -35,8 +36,9 @@ namespace UnityStandardAssets.ImageEffects
             DestroyImmediate(accumTexture);
         }
 
-        // Called by camera to apply image effect
-        void OnRenderImage (RenderTexture source, RenderTexture destination)
+    // Called by camera to apply image effect
+    [Obsolete]
+    void OnRenderImage (RenderTexture source, RenderTexture destination)
         {
             // Create the accumulation texture
             if (accumTexture == null || accumTexture.width != source.width || accumTexture.height != source.height)
