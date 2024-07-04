@@ -86,17 +86,21 @@ public class MyPlayer : MonoBehaviour
     characterInputs.MoveAxisRight = Input.GetAxisRaw(HorizontalInput);
     characterInputs.CameraRotation = OrbitCamera.Transform.rotation;
     characterInputs.JumpDown = Input.GetKeyDown(KeyCode.Space);
+    characterInputs.JumpHeld = Input.GetKey(KeyCode.Space);
     characterInputs.CrouchDown = Input.GetKeyDown(KeyCode.C);
     characterInputs.CrouchUp = Input.GetKeyUp(KeyCode.C);
+    characterInputs.CrouchHeld = Input.GetKey(KeyCode.C);
+    characterInputs.ChargingDown = Input.GetKeyDown(KeyCode.Q);
+    characterInputs.NoClipDown = Input.GetKeyUp(KeyCode.T);
 
     // Apply inputs to character
     Character.SetInputs(ref characterInputs);
     
     // Apply impulse/velocity?
-    if (Input.GetKeyDown(KeyCode.Q))
+    /*if (Input.GetKeyDown(KeyCode.Q))
     {
       Character.Motor.ForceUnground(0.1f);
       Character.AddVelocity(Vector3.one * ImpulseMultiplier);
-    }
+    }*/
   }
 }

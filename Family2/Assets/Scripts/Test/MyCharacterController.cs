@@ -8,6 +8,8 @@ using System.Diagnostics;
 public enum CharacterState
 {
   Default,
+  Charging,
+  NoClip,//like spectator mode or ghost
 }
 public struct PlayerCharacterInputs
 {
@@ -15,8 +17,12 @@ public struct PlayerCharacterInputs
   public float MoveAxisRight;
   public Quaternion CameraRotation;
   public bool JumpDown;
+  public bool JumpHeld;
   public bool CrouchDown;
   public bool CrouchUp;
+  public bool CrouchHeld;
+  public bool ChargingDown;
+  public bool NoClipDown;
 }
 
 public class MyCharacterController : MonoBehaviour, ICharacterController
@@ -44,6 +50,15 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   public float JumpPreGroundingGraceTime = 0f;
   public float JumpPostGroundingGraceTime = 0f;
 
+  [Header("Charging")]
+  public float ChargeSpeed = 15f;
+  public float MaxChargeTime = 1.5f;
+  public float StoppedTime = 1f;
+
+  [Header("NoClip")]
+  public float NoClipMoveSpeed = 10f;
+  public float NoClipSharpness = 15;
+
   [Header("Misc")]
   public Vector3 Gravity = new Vector3(0, -30f, 0);
   public bool OrientTowardsGravity = false;
@@ -55,6 +70,8 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   private Collider[] _probedColliders = new Collider[8];
   private Vector3 _moveInputVector;
   private Vector3 _lookInputVector;
+  private bool _jumpInputIsHeld = false;
+  private bool _crouchInputIsHeld = false;
   private bool _jumpRequested = false;
   private bool _jumpConsumed = false;
   private bool _jumpedThisFrame = false;
@@ -66,6 +83,12 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   private Vector3 _internalVelocityAdd = Vector3.zero;
   private bool _shouldBeCrouching = false;
   private bool _isCrouching = false;
+
+  private Vector3 _currentChargeVelocity;
+  private bool _isStopped;
+  private bool _mustStopVelocity = false;
+  private float _timeSinceStartedCharge = 0;
+  private float _timeSinceStopped = 0;
 
   private void Start()
   {
@@ -93,6 +116,21 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
         {
           break;
         }
+      case CharacterState.Charging:
+        {
+          _currentChargeVelocity = Motor.CharacterForward * ChargeSpeed;
+          _isStopped = false;
+          _timeSinceStartedCharge = 0f;
+          _timeSinceStopped = 0f;
+          break;
+        }
+      case CharacterState.NoClip:
+        {
+          Motor.SetCapsuleCollisionsActivation(false);
+          Motor.SetMovementCollisionsSolvingActivation(false);
+          Motor.SetGroundSolvingActivation(false);
+          break;
+        }
     }
   }
   /// <summary>
@@ -106,6 +144,13 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
         {
           break;
         }
+      case CharacterState.NoClip:
+        {
+          Motor.SetCapsuleCollisionsActivation(true);
+          Motor.SetMovementCollisionsSolvingActivation(true);
+          Motor.SetGroundSolvingActivation(true);
+          break;
+        }
     }
   }
   /// <summary>
@@ -113,6 +158,28 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   /// </summary>
   public void SetInputs(ref PlayerCharacterInputs inputs)
   {
+    // Handle state transition from input
+    if (inputs.ChargingDown)
+    {
+      TransitionToState(CharacterState.Charging);
+    }
+
+    // Handle state transition from input
+    if (inputs.NoClipDown)
+    {
+      if (CurrentCharacterState == CharacterState.Default)
+      {
+        TransitionToState(CharacterState.NoClip);
+      }
+      else if (CurrentCharacterState == CharacterState.NoClip)
+      {
+        TransitionToState(CharacterState.Default);
+      }
+    }
+
+    _jumpInputIsHeld = inputs.JumpHeld;
+    _crouchInputIsHeld = inputs.CrouchHeld;
+
     // Clamp input
     Vector3 moveInputVector = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
 
@@ -157,6 +224,12 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
         break;
       }
+      case CharacterState.NoClip:
+        {
+          _moveInputVector = inputs.CameraRotation * moveInputVector;
+          _lookInputVector = cameraPlanarDirection;
+          break;
+        }
     }
   }
 
@@ -166,6 +239,23 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   /// </summary>
   public void BeforeCharacterUpdate(float deltaTime)
   {
+    switch (CurrentCharacterState)
+    {
+      case CharacterState.Default:
+        {
+          break;
+        }
+      case CharacterState.Charging:
+        {
+          // Update times
+          _timeSinceStartedCharge += deltaTime;
+          if (_isStopped)
+          {
+            _timeSinceStopped += deltaTime;
+          }
+          break;
+        }
+    }
   }
 
   /// <summary>
@@ -173,7 +263,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   /// This is where you tell your character what its rotation should be right now. 
   /// This is the ONLY place where you should set the character's rotation
   /// </summary>
-  public void UpdateRotation(ref Quaternion currentRotation, float deltaTime)
+  public void UpdateRotation(ref Quaternion currentRotation, float deltaTime)//change how the player tilts to one side
   {
     switch (CurrentCharacterState)
     {
@@ -198,6 +288,23 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
         break;
       }
+      case CharacterState.NoClip:
+        {
+          if (_lookInputVector != Vector3.zero && OrientationSharpness > 0f)
+          {
+            // Smoothly interpolate from current to target look direction
+            Vector3 smoothedLookInputDirection = Vector3.Slerp(Motor.CharacterForward, _lookInputVector, 1 - Mathf.Exp(-OrientationSharpness * deltaTime)).normalized;
+
+            // Set the current rotation (which will be used by the KinematicCharacterMotor)
+            currentRotation = Quaternion.LookRotation(smoothedLookInputDirection, Motor.CharacterUp);
+          }
+          if (OrientTowardsGravity)
+          {
+            // Rotate from current up to invert gravity
+            currentRotation = Quaternion.FromToRotation((currentRotation * Vector3.up), -Gravity) * currentRotation;
+          }
+          break;
+        }
     }
   }
 
@@ -308,6 +415,39 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
         break;
       }
+      case CharacterState.Charging:
+      {
+        // If we have stopped and need to cancel velocity, do it here
+        if (_mustStopVelocity)
+        {
+          currentVelocity = Vector3.zero;
+          _mustStopVelocity = false;
+        }
+
+        if (_isStopped)
+        {
+          // When stopped, do no velocity handling except gravity
+          currentVelocity += Gravity * deltaTime;
+        }
+        else
+        {
+          // When charging, velocity is always constant
+          float previousY = currentVelocity.y;
+          currentVelocity = _currentChargeVelocity;
+          currentVelocity.y = previousY;
+          currentVelocity += Gravity * deltaTime;
+        }
+        break;
+      }
+      case CharacterState.NoClip:
+        {
+          float verticalInput = 0f + (_jumpInputIsHeld ? 1f : 0f) + (_crouchInputIsHeld ? -1f : 0f);
+
+          // Smoothly interpolate to target velocity
+          Vector3 targetMovementVelocity = (_moveInputVector + (Motor.CharacterUp * verticalInput)).normalized * NoClipMoveSpeed;
+          currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, 1 - Mathf.Exp(-NoClipSharpness * deltaTime));
+          break;
+        }
     }
   }
 
@@ -364,6 +504,22 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
         }
         break;
       }
+      case CharacterState.Charging:
+      {
+        // Detect being stopped by elapsed time
+        if (!_isStopped && _timeSinceStartedCharge > MaxChargeTime)
+        {
+          _mustStopVelocity = true;
+          _isStopped = true;
+        }
+
+        // Detect end of stopping phase and transition back to default movement state
+        if (_timeSinceStopped > StoppedTime)
+        {
+          TransitionToState(CharacterState.Default);
+        }
+        break;
+      }
     }
   }
 
@@ -382,16 +538,25 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     switch (CurrentCharacterState)
     {
       case CharacterState.Default:
+      {
+        // We can wall jump only if we are not stable on ground and are moving  against an obstruction
+        if (AllowWallJump && !Motor.GroundingStatus.IsStableOnGround && !hitStabilityReport.IsStable)
         {
-          // We can wall jump only if we are not stable on ground and are moving  against an obstruction
-          if (AllowWallJump && !Motor.GroundingStatus.IsStableOnGround && !hitStabilityReport.IsStable)
-          {
-            _canWallJump = true;
-            _wallJumpNormal = hitNormal;
-          }
-
-          break;
+          _canWallJump = true;
+          _wallJumpNormal = hitNormal;
         }
+        break;
+      }
+      case CharacterState.Charging:
+      {
+        // Detect being stopped by obstructions
+        if (!_isStopped && !hitStabilityReport.IsStable && Vector3.Dot(-hitNormal, _currentChargeVelocity.normalized) > 0.5f)
+        {
+          _mustStopVelocity = true;
+          _isStopped = true;
+        }
+        break;
+      }
     }
   
   }
