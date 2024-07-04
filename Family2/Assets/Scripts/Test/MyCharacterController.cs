@@ -10,6 +10,7 @@ public enum CharacterState
   Default,
   Charging,
   NoClip,//like spectator mode or ghost
+  Swimming,
 }
 public struct PlayerCharacterInputs
 {
@@ -59,6 +60,13 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   public float NoClipMoveSpeed = 10f;
   public float NoClipSharpness = 15;
 
+  [Header("Swimming")]
+  public Transform SwimmingReferencePoint;
+  public LayerMask WaterLayer;
+  public float SwimmingSpeed = 4f;
+  public float SwimmingMovementSharpness = 3;
+  public float SwimmingOrientationSharpness = 2f;
+
   [Header("Misc")]
   public Vector3 Gravity = new Vector3(0, -30f, 0);
   public bool OrientTowardsGravity = false;
@@ -83,6 +91,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   private Vector3 _internalVelocityAdd = Vector3.zero;
   private bool _shouldBeCrouching = false;
   private bool _isCrouching = false;
+  private Collider _waterZone;
 
   private Vector3 _currentChargeVelocity;
   private bool _isStopped;
@@ -114,6 +123,7 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     {
       case CharacterState.Default:
         {
+          Motor.SetGroundSolvingActivation(true);
           break;
         }
       case CharacterState.Charging:
@@ -128,6 +138,11 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
         {
           Motor.SetCapsuleCollisionsActivation(false);
           Motor.SetMovementCollisionsSolvingActivation(false);
+          Motor.SetGroundSolvingActivation(false);
+          break;
+        }
+      case CharacterState.Swimming:
+        {
           Motor.SetGroundSolvingActivation(false);
           break;
         }
@@ -194,38 +209,46 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     switch (CurrentCharacterState)
     {
       case CharacterState.Default:
-      {
-        // Move and look inputs
-        _moveInputVector = cameraPlanarRotation * moveInputVector;
-        _lookInputVector = cameraPlanarDirection;
-
-        // Jumping input
-        if (inputs.JumpDown)
         {
-          _timeSinceJumpRequested = 0f;
-          _jumpRequested = true;
-        }
-        // Crouching input
-        if (inputs.CrouchDown)
-        {
-          _shouldBeCrouching = true;
+          // Move and look inputs
+          _moveInputVector = cameraPlanarRotation * moveInputVector;
+          _lookInputVector = cameraPlanarDirection;
 
-          if (!_isCrouching)
+          // Jumping input
+          if (inputs.JumpDown)
           {
-            _isCrouching = true;
-            Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
-            MeshRoot.localScale = new Vector3(1f, 0.5f, 1f);
+            _timeSinceJumpRequested = 0f;
+            _jumpRequested = true;
           }
-        }
-        else if (inputs.CrouchUp)
-        {
-          _shouldBeCrouching = false;
-        }
+          // Crouching input
+          if (inputs.CrouchDown)
+          {
+            _shouldBeCrouching = true;
 
-        break;
-      }
+            if (!_isCrouching)
+            {
+              _isCrouching = true;
+              Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
+              MeshRoot.localScale = new Vector3(1f, 0.5f, 1f);
+            }
+          }
+          else if (inputs.CrouchUp)
+          {
+            _shouldBeCrouching = false;
+          }
+
+          break;
+        }
       case CharacterState.NoClip:
         {
+          _moveInputVector = inputs.CameraRotation * moveInputVector;
+          _lookInputVector = cameraPlanarDirection;
+          break;
+        }
+      case CharacterState.Swimming:
+        {
+          _jumpRequested = inputs.JumpHeld;
+
           _moveInputVector = inputs.CameraRotation * moveInputVector;
           _lookInputVector = cameraPlanarDirection;
           break;
@@ -239,6 +262,32 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   /// </summary>
   public void BeforeCharacterUpdate(float deltaTime)
   {
+    // Handle detecting water surfaces
+    // Do a character overlap test to detect water surfaces
+    if (Motor.CharacterOverlap(Motor.TransientPosition, Motor.TransientRotation, _probedColliders, WaterLayer, QueryTriggerInteraction.Collide) > 0)
+    {
+      // If a water surface was detected
+      if (_probedColliders[0] != null)
+      {
+        // If the swimming reference point is inside the box, make sure we are in swimming state
+        if (Physics.ClosestPoint(SwimmingReferencePoint.position, _probedColliders[0], _probedColliders[0].transform.position, _probedColliders[0].transform.rotation) == SwimmingReferencePoint.position)
+        {
+          if (CurrentCharacterState == CharacterState.Default)
+          {
+            TransitionToState(CharacterState.Swimming);
+            _waterZone = _probedColliders[0];
+          }
+        }
+        // otherwise; default state
+        else
+        {
+          if (CurrentCharacterState == CharacterState.Swimming)
+          {
+            TransitionToState(CharacterState.Default);
+          }
+        }
+      }
+    }
     switch (CurrentCharacterState)
     {
       case CharacterState.Default:
@@ -289,6 +338,23 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
         break;
       }
       case CharacterState.NoClip:
+        {
+          if (_lookInputVector != Vector3.zero && OrientationSharpness > 0f)
+          {
+            // Smoothly interpolate from current to target look direction
+            Vector3 smoothedLookInputDirection = Vector3.Slerp(Motor.CharacterForward, _lookInputVector, 1 - Mathf.Exp(-OrientationSharpness * deltaTime)).normalized;
+
+            // Set the current rotation (which will be used by the KinematicCharacterMotor)
+            currentRotation = Quaternion.LookRotation(smoothedLookInputDirection, Motor.CharacterUp);
+          }
+          if (OrientTowardsGravity)
+          {
+            // Rotate from current up to invert gravity
+            currentRotation = Quaternion.FromToRotation((currentRotation * Vector3.up), -Gravity) * currentRotation;
+          }
+          break;
+        }
+      case CharacterState.Swimming:
         {
           if (_lookInputVector != Vector3.zero && OrientationSharpness > 0f)
           {
@@ -446,6 +512,36 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
           // Smoothly interpolate to target velocity
           Vector3 targetMovementVelocity = (_moveInputVector + (Motor.CharacterUp * verticalInput)).normalized * NoClipMoveSpeed;
           currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, 1 - Mathf.Exp(-NoClipSharpness * deltaTime));
+          break;
+        }
+      case CharacterState.Swimming:
+        {
+          float verticalInput = 0f + (_jumpInputIsHeld ? 1f : 0f) + (_crouchInputIsHeld ? -1f : 0f);
+
+          // Smoothly interpolate to target swimming velocity
+          Vector3 targetMovementVelocity = (_moveInputVector + (Motor.CharacterUp * verticalInput)).normalized * SwimmingSpeed;
+          Vector3 smoothedVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, 1 - Mathf.Exp(-SwimmingMovementSharpness * deltaTime));
+
+          // See if our swimming reference point would be out of water after the movement from our velocity has been applied
+          {
+            Vector3 resultingSwimmingReferancePosition = Motor.TransientPosition + (smoothedVelocity * deltaTime) + (SwimmingReferencePoint.position - Motor.TransientPosition);
+            Vector3 closestPointWaterSurface = Physics.ClosestPoint(resultingSwimmingReferancePosition, _waterZone, _waterZone.transform.position, _waterZone.transform.rotation);
+
+            // if our position would be outside the water surface on next update, project the velocity on the surface normal so that it would not take us out of the water
+            if (closestPointWaterSurface != resultingSwimmingReferancePosition)
+            {
+              Vector3 waterSurfaceNormal = (resultingSwimmingReferancePosition - closestPointWaterSurface).normalized;
+              smoothedVelocity = Vector3.ProjectOnPlane(smoothedVelocity, waterSurfaceNormal);
+
+              // Jump out of water
+              if (_jumpRequested)
+              {
+                smoothedVelocity += (Motor.CharacterUp * JumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
+              }
+            }
+          }
+
+          currentVelocity = smoothedVelocity;
           break;
         }
     }

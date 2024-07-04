@@ -19,7 +19,7 @@ public class MyPlayer : MonoBehaviour
   private const string VerticalInput = "Vertical";
   
   private float ZoomCamera = 0.0f;
-  private float ImpulseMultiplier = 20.0f;
+  //private float ImpulseMultiplier = 20.0f;
 
   private void Start()
   {
@@ -95,12 +95,5 @@ public class MyPlayer : MonoBehaviour
 
     // Apply inputs to character
     Character.SetInputs(ref characterInputs);
-    
-    // Apply impulse/velocity?
-    /*if (Input.GetKeyDown(KeyCode.Q))
-    {
-      Character.Motor.ForceUnground(0.1f);
-      Character.AddVelocity(Vector3.one * ImpulseMultiplier);
-    }*/
   }
 }
