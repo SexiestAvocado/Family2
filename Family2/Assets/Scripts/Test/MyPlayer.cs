@@ -92,6 +92,7 @@ public class MyPlayer : MonoBehaviour
     characterInputs.CrouchHeld = Input.GetKey(KeyCode.C);
     characterInputs.ChargingDown = Input.GetKeyDown(KeyCode.Q);
     characterInputs.NoClipDown = Input.GetKeyUp(KeyCode.T);
+    characterInputs.ClimbLadder = Input.GetKeyUp(KeyCode.E);
 
     // Apply inputs to character
     Character.SetInputs(ref characterInputs);

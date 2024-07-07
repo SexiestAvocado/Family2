@@ -11,6 +11,14 @@ public enum CharacterState
   Charging,
   NoClip,//like spectator mode or ghost
   Swimming,
+  Climbing
+}
+
+public enum ClimbingState
+{
+  Anchoring,
+  Climbing,
+  DeAnchoring
 }
 public struct PlayerCharacterInputs
 {
@@ -24,6 +32,7 @@ public struct PlayerCharacterInputs
   public bool CrouchHeld;
   public bool ChargingDown;
   public bool NoClipDown;
+  public bool ClimbLadder;
 }
 
 public class MyCharacterController : MonoBehaviour, ICharacterController
@@ -67,6 +76,11 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   public float SwimmingMovementSharpness = 3;
   public float SwimmingOrientationSharpness = 2f;
 
+  [Header("Ladder Climbing")]
+  public float ClimbingSpeed = 4f;
+  public float AnchoringDuration = 0.25f;
+  public LayerMask InteractionLayer;
+
   [Header("Misc")]
   public Vector3 Gravity = new Vector3(0, -30f, 0);
   public bool OrientTowardsGravity = false;
@@ -93,11 +107,39 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
   private bool _isCrouching = false;
   private Collider _waterZone;
 
+  //Charging vars
   private Vector3 _currentChargeVelocity;
   private bool _isStopped;
   private bool _mustStopVelocity = false;
   private float _timeSinceStartedCharge = 0;
   private float _timeSinceStopped = 0;
+
+  // Ladder vars
+  private float _ladderUpDownInput;
+  private MyLadder _activeLadder { get; set; }
+  private ClimbingState _internalClimbingState;
+  private ClimbingState _climbingState
+  {
+    get
+    {
+      return _internalClimbingState;
+    }
+    set
+    {
+      _internalClimbingState = value;
+      _anchoringTimer = 0f;
+      _anchoringStartPosition = Motor.TransientPosition;
+      _anchoringStartRotation = Motor.TransientRotation;
+    }
+  }
+  private Vector3 _ladderTargetPosition;
+  private Quaternion _ladderTargetRotation;
+  private float _onLadderSegmentState = 0;
+  private float _anchoringTimer = 0f;
+  private Vector3 _anchoringStartPosition = Vector3.zero;
+  private Quaternion _anchoringStartRotation = Quaternion.identity;
+  private Quaternion _rotationBeforeClimbing = Quaternion.identity;
+  //---------------------------------------------------------------------------
 
   private void Start()
   {
@@ -146,6 +188,19 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
           Motor.SetGroundSolvingActivation(false);
           break;
         }
+      case CharacterState.Climbing:
+        {
+          _rotationBeforeClimbing = Motor.TransientRotation;
+
+          Motor.SetMovementCollisionsSolvingActivation(false);
+          Motor.SetGroundSolvingActivation(false);
+          _climbingState = ClimbingState.Anchoring;
+
+          // Store the target position and rotation to snap to
+          _ladderTargetPosition = _activeLadder.ClosestPointOnLadderSegment(Motor.TransientPosition, out _onLadderSegmentState);
+          _ladderTargetRotation = _activeLadder.transform.rotation;
+          break;
+        }
     }
   }
   /// <summary>
@@ -162,6 +217,12 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
       case CharacterState.NoClip:
         {
           Motor.SetCapsuleCollisionsActivation(true);
+          Motor.SetMovementCollisionsSolvingActivation(true);
+          Motor.SetGroundSolvingActivation(true);
+          break;
+        }
+      case CharacterState.Climbing:
+        {
           Motor.SetMovementCollisionsSolvingActivation(true);
           Motor.SetGroundSolvingActivation(true);
           break;
@@ -194,6 +255,36 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
 
     _jumpInputIsHeld = inputs.JumpHeld;
     _crouchInputIsHeld = inputs.CrouchHeld;
+
+    // Handle ladder transitions
+    _ladderUpDownInput = inputs.MoveAxisForward;
+    if (inputs.ClimbLadder)
+    {
+      if (Motor.CharacterOverlap(Motor.TransientPosition, Motor.TransientRotation, _probedColliders, InteractionLayer, QueryTriggerInteraction.Collide) > 0)
+      {
+        if (_probedColliders[0] != null)
+        {
+          // Handle ladders
+          MyLadder ladder = _probedColliders[0].gameObject.GetComponent<MyLadder>();
+          if (ladder)
+          {
+            // Transition to ladder climbing state
+            if (CurrentCharacterState == CharacterState.Default)
+            {
+              _activeLadder = ladder;
+              TransitionToState(CharacterState.Climbing);
+            }
+            // Transition back to default movement state
+            else if (CurrentCharacterState == CharacterState.Climbing)
+            {
+              _climbingState = ClimbingState.DeAnchoring;
+              _ladderTargetPosition = Motor.TransientPosition;
+              _ladderTargetRotation = _rotationBeforeClimbing;
+            }
+          }
+        }
+      }
+    }
 
     // Clamp input
     Vector3 moveInputVector = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
@@ -334,7 +425,6 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
           // Rotate from current up to invert gravity
           currentRotation = Quaternion.FromToRotation((currentRotation * Vector3.up), -Gravity) * currentRotation;
         }
-
         break;
       }
       case CharacterState.NoClip:
@@ -368,6 +458,20 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
           {
             // Rotate from current up to invert gravity
             currentRotation = Quaternion.FromToRotation((currentRotation * Vector3.up), -Gravity) * currentRotation;
+          }
+          break;
+        }
+      case CharacterState.Climbing:
+        {
+          switch (_climbingState)
+          {
+            case ClimbingState.Climbing:
+              currentRotation = _activeLadder.transform.rotation;
+              break;
+            case ClimbingState.Anchoring:
+            case ClimbingState.DeAnchoring:
+              currentRotation = Quaternion.Slerp(_anchoringStartRotation, _ladderTargetRotation, (_anchoringTimer / AnchoringDuration));
+              break;
           }
           break;
         }
@@ -544,6 +648,23 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
           currentVelocity = smoothedVelocity;
           break;
         }
+      case CharacterState.Climbing:
+        {
+          currentVelocity = Vector3.zero;
+
+          switch (_climbingState)
+          {
+            case ClimbingState.Climbing:
+              currentVelocity = (_ladderUpDownInput * _activeLadder.transform.up).normalized * ClimbingSpeed;
+              break;
+            case ClimbingState.Anchoring:
+            case ClimbingState.DeAnchoring:
+              Vector3 tmpPosition = Vector3.Lerp(_anchoringStartPosition, _ladderTargetPosition, (_anchoringTimer / AnchoringDuration));
+              currentVelocity = Motor.GetVelocityForMovePosition(Motor.TransientPosition, tmpPosition, deltaTime);
+              break;
+          }
+          break;
+        }
     }
   }
 
@@ -556,66 +677,112 @@ public class MyCharacterController : MonoBehaviour, ICharacterController
     switch (CurrentCharacterState)
     {
       case CharacterState.Default:
-      {
-        // Handle jump-related values
         {
-          // Handle jumping pre-ground grace period
-          if (_jumpRequested && _timeSinceJumpRequested > JumpPreGroundingGraceTime)
+          // Handle jump-related values
           {
-            _jumpRequested = false;
-          }
-          // Handle jumping while sliding
-          if (AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround)
-          {
-            // If we're on a ground surface, reset jumping values
-            if (!_jumpedThisFrame)
+            // Handle jumping pre-ground grace period
+            if (_jumpRequested && _timeSinceJumpRequested > JumpPreGroundingGraceTime)
             {
-              _doubleJumpConsumed = false;
-              _jumpConsumed = false;
+              _jumpRequested = false;
             }
-            _timeSinceLastAbleToJump = 0f;
+            // Handle jumping while sliding
+            if (AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround)
+            {
+              // If we're on a ground surface, reset jumping values
+              if (!_jumpedThisFrame)
+              {
+                _doubleJumpConsumed = false;
+                _jumpConsumed = false;
+              }
+              _timeSinceLastAbleToJump = 0f;
+            }
+            else
+            {
+              // Keep track of time since we were last able to jump (for grace period)
+              _timeSinceLastAbleToJump += deltaTime;
+            }
           }
-          else
+          // Handle uncrouching
+          if (_isCrouching && !_shouldBeCrouching)
           {
-            // Keep track of time since we were last able to jump (for grace period)
-            _timeSinceLastAbleToJump += deltaTime;
+            // Do an overlap test with the character's standing height to see if there are any obstructions
+            Motor.SetCapsuleDimensions(0.5f, 2f, 1f);
+            if (Motor.CharacterOverlap(Motor.TransientPosition,Motor.TransientRotation,_probedColliders, Motor.CollidableLayers,QueryTriggerInteraction.Ignore) > 0)//also here is colliders to ignore
+            {
+              // If obstructions, just stick to crouching dimensions
+              Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
+            }
+            else
+            {
+              // If no obstructions, uncrouch
+              MeshRoot.localScale = new Vector3(1f, 1f, 1f);
+              _isCrouching = false;
+            }
           }
+          break;
         }
-        // Handle uncrouching
-        if (_isCrouching && !_shouldBeCrouching)
-        {
-          // Do an overlap test with the character's standing height to see if there are any obstructions
-          Motor.SetCapsuleDimensions(0.5f, 2f, 1f);
-          if (Motor.CharacterOverlap(Motor.TransientPosition,Motor.TransientRotation,_probedColliders, Motor.CollidableLayers,QueryTriggerInteraction.Ignore) > 0)//also here is colliders to ignore
-          {
-            // If obstructions, just stick to crouching dimensions
-            Motor.SetCapsuleDimensions(0.5f, 1f, 0.5f);
-          }
-          else
-          {
-            // If no obstructions, uncrouch
-            MeshRoot.localScale = new Vector3(1f, 1f, 1f);
-            _isCrouching = false;
-          }
-        }
-        break;
-      }
       case CharacterState.Charging:
-      {
-        // Detect being stopped by elapsed time
-        if (!_isStopped && _timeSinceStartedCharge > MaxChargeTime)
+        {
+          // Detect being stopped by elapsed time
+          if (!_isStopped && _timeSinceStartedCharge > MaxChargeTime)
         {
           _mustStopVelocity = true;
           _isStopped = true;
         }
 
-        // Detect end of stopping phase and transition back to default movement state
-        if (_timeSinceStopped > StoppedTime)
+          // Detect end of stopping phase and transition back to default movement state
+          if (_timeSinceStopped > StoppedTime)
         {
           TransitionToState(CharacterState.Default);
         }
-        break;
-      }
+          break;
+        }
+      case CharacterState.Climbing:
+        {
+          switch (_climbingState)
+          {
+            case ClimbingState.Climbing:
+              // Detect getting off ladder during climbing
+              _activeLadder.ClosestPointOnLadderSegment(Motor.TransientPosition, out _onLadderSegmentState);
+              if (Mathf.Abs(_onLadderSegmentState) > 0.05f)
+              {
+                _climbingState = ClimbingState.DeAnchoring;
+
+                // If we're higher than the ladder top point
+                if (_onLadderSegmentState > 0)
+                {
+                  _ladderTargetPosition = _activeLadder.TopReleasePoint.position;
+                  _ladderTargetRotation = _activeLadder.TopReleasePoint.rotation;
+                }
+                // If we're lower than the ladder bottom point
+                else if (_onLadderSegmentState < 0)
+                {
+                  _ladderTargetPosition = _activeLadder.BottomReleasePoint.position;
+                  _ladderTargetRotation = _activeLadder.BottomReleasePoint.rotation;
+                }
+              }
+              break;
+            case ClimbingState.Anchoring:
+            case ClimbingState.DeAnchoring:
+              // Detect transitioning out from anchoring states
+              if (_anchoringTimer >= AnchoringDuration)
+              {
+                if (_climbingState == ClimbingState.Anchoring)
+                {
+                  _climbingState = ClimbingState.Climbing;
+                }
+                else if (_climbingState == ClimbingState.DeAnchoring)
+                {
+                  TransitionToState(CharacterState.Default);
+                }
+              }
+
+              // Keep track of time since we started anchoring
+              _anchoringTimer += deltaTime;
+              break;
+          }
+          break;
+        }
     }
   }
 
